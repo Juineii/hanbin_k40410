@@ -643,12 +643,12 @@
                 </div>
                 <div class="sort-radio-container">
                     <label>
-                        <input type="radio" name="sortOrder" value="default" checked>
-                        <span id="sortDefaultLabel">时间顺序</span>
+                        <input type="radio" name="sortOrder" value="timeDesc" checked>
+                        <span id="sortTimeDescLabel">时间倒序</span>
                     </label>
                     <label>
-                        <input type="radio" name="sortOrder" value="desc">
-                        <span id="sortDescLabel">销量降序</span>
+                        <input type="radio" name="sortOrder" value="salesDesc">
+                        <span id="sortSalesDescLabel">销量降序</span>
                     </label>
                 </div>
             </div>
@@ -700,8 +700,8 @@
                 thSource: "来源",
                 thChange: "变化",
                 thUnit: "单笔",
-                sortDefault: "时间顺序",
-                sortDesc: "销量降序",
+                sortTimeDesc: "时间倒序",
+                sortSalesDesc: "销量降序",
                 infoNoteHtml: "最后5-10分钟请监控销量变化补单，推荐本数根据数据来源内的所有数据计算，为中签中位数本数，仅作参考，不提供擦线本数；若名额人数有问题、数据长时间没更新，请及时联系我们（<strong>vx：nsxnso</strong>）。",
                 updatePrefix: "更新于",
                 footerRefreshHint: "数据未更新可刷新网页",
@@ -724,8 +724,8 @@
                 thSource: "Source",
                 thChange: "Change",
                 thUnit: "Qty",
-                sortDefault: "Chronological",
-                sortDesc: "Sales Descending",
+                sortTimeDesc: "Reverse Chronological",
+                sortSalesDesc: "Sales Descending",
                 infoNoteHtml: "In the final 5–10 minutes, monitor sales to fill orders. The recommended quantity—the median from all data—is for reference only; minimum thresholds are not provided. If quota issues arise or data is outdated, contact us promptly (<strong>WeChat：nsxnso</strong>).",
                 updatePrefix: "Updated at",
                 footerRefreshHint: "Refresh page if no update",
@@ -748,8 +748,8 @@
                 thSource: "출처",
                 thChange: "변경사항",
                 thUnit: "수량",
-                sortDefault: "시간 순서",
-                sortDesc: "판매량 내림차순",
+                sortTimeDesc: "시간 역순",
+                sortSalesDesc: "판매량 내림차순",
                 infoNoteHtml: "마지막 5~10분 동안 판매 추이를 확인하며 보충 주문해 주세요. 추천 수량은 데이터 내 모든 정보를 바탕으로 산출된 당첨 중간값으로, 참고용이며 최소 당첨 수량은 제공하지 않습니다. 정원 관련 문제가 있거나 데이터가 오래된 경우, 빠르게 연락해 주세요 (<strong>WeChat：nsxnso</strong>).",
                 updatePrefix: "업데이트 시간",
                 footerRefreshHint: "업데이트되지 않으면 페이지 새로고침",
@@ -769,13 +769,13 @@
         const lastUpdateSpan = document.getElementById('lastUpdate');
         const rowCountBadge = document.getElementById('rowCountBadge');
         const pageTitleEl = document.getElementById('pageTitle');
-        const radioDefault = document.querySelector('input[name="sortOrder"][value="default"]');
-        const radioDesc = document.querySelector('input[name="sortOrder"][value="desc"]');
+        const radioTimeDesc = document.querySelector('input[name="sortOrder"][value="timeDesc"]');
+        const radioSalesDesc = document.querySelector('input[name="sortOrder"][value="salesDesc"]');
 
         // ---------- 全局状态 ----------
         let currentLang = 'zh';
-        let originalData = [];          // 原始数据（按CSV顺序）
-        let sortDescending = false;     // 是否销量降序
+        let originalData = [];          // 原始数据（按CSV顺序，旧在上新在下）
+        let sortMode = 'timeDesc';      // 'timeDesc' 或 'salesDesc'
         let lastError = null;
         let lastSuccessTimeStr = null;
         let currentThreshold = ACTIVITY_CONFIG.defaultThreshold;
@@ -809,8 +809,8 @@
             document.getElementById('thSource').innerHTML = t('thSource');
             document.getElementById('thChange').innerHTML = t('thChange');
             document.getElementById('thUnit').innerHTML = t('thUnit');
-            document.getElementById('sortDefaultLabel').innerHTML = t('sortDefault');
-            document.getElementById('sortDescLabel').innerHTML = t('sortDesc');
+            document.getElementById('sortTimeDescLabel').innerHTML = t('sortTimeDesc');
+            document.getElementById('sortSalesDescLabel').innerHTML = t('sortSalesDesc');
             document.getElementById('footerRefreshHint').innerHTML = t('footerRefreshHint');
             const infoNoteDiv = document.getElementById('infoNote');
             infoNoteDiv.innerHTML = `<p>${t('infoNoteHtml')}</p>`;
@@ -827,7 +827,19 @@
             }
         }
 
-        // 渲染表格（根据当前排序）
+        // 根据当前排序模式获取要显示的数据
+        function getDisplayData() {
+            if (!originalData.length) return [];
+            if (sortMode === 'timeDesc') {
+                // 时间倒序：直接反转数组（因为原始数据是按时间正序，旧在前新在后）
+                return [...originalData].reverse();
+            } else {
+                // 销量降序
+                return [...originalData].sort((a, b) => b.saleValue - a.saleValue);
+            }
+        }
+
+        // 渲染表格
         function renderTableByState() {
             if (lastError) {
                 tableBody.innerHTML = `<tr class="empty-row"><td colspan="4">${t('errorPrefix')}${lastError}</td></tr>`;
@@ -840,7 +852,7 @@
                 return;
             }
 
-            let displayData = sortDescending ? [...originalData].sort((a,b) => b.saleValue - a.saleValue) : originalData;
+            const displayData = getDisplayData();
             let html = '';
             displayData.forEach(row => {
                 const saleClass = row.saleValue >= 0 ? 'sales-positive' : 'sales-negative';
@@ -996,13 +1008,15 @@
         });
 
         function handleSortChange() {
-            sortDescending = radioDesc.checked;
+            if (radioTimeDesc.checked) sortMode = 'timeDesc';
+            else if (radioSalesDesc.checked) sortMode = 'salesDesc';
             renderTableByState();
         }
-        radioDefault.addEventListener('change', handleSortChange);
-        radioDesc.addEventListener('change', handleSortChange);
-        sortDescending = false;
-        radioDefault.checked = true;
+        radioTimeDesc.addEventListener('change', handleSortChange);
+        radioSalesDesc.addEventListener('change', handleSortChange);
+        // 默认选中时间倒序
+        radioTimeDesc.checked = true;
+        sortMode = 'timeDesc';
 
         function setLanguage(lang) {
             currentLang = lang;
